@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!--
+        Logs estruturados em JSON (SAD Sec14.1). O LogstashEncoder inclui
+        automaticamente todo o conteudo do MDC como campos do JSON - hoje
+        so o traceId (TraceIdFilter), mas usuario_id/ambiente_financeiro_id
+        (T1.1.4) aparecerao sem precisar mudar esta configuracao.
+    -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"aplicacao":"unifinancas"}</customFields>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

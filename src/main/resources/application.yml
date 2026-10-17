@@ -1,0 +1,118 @@
+spring:
+  application:
+    name: unifinancas
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:unifinancas}
+    username: ${DB_USER:unifinancas}
+    password: ${DB_PASSWORD:unifinancas}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+unifinancas:
+  app:
+    # Base do frontend web, usada para montar o link de redefinicao de senha
+    # enviado por e-mail (T1.1.10, SAD Sec6.7).
+    url-base: ${APP_URL_BASE:http://localhost:5173}
+  auth:
+    redefinicao-senha:
+      # Validade do token de "esqueci minha senha" (T1.1.10, RN-14). Duracao ISO-8601
+      # ou abreviada (1h, 30m). Configuravel: o SAD fixa 1h so como default.
+      validade: ${AUTH_REDEFINICAO_SENHA_VALIDADE:1h}
+  cors:
+    origens-permitidas: ${CORS_ORIGENS_PERMITIDAS:http://localhost:5173,http://localhost:5174}
+  jobs:
+    worker:
+      intervalo-ms: 5000
+      lote: 10
+    purga-documento:
+      # ADR-020: quando o job diario de purga enfileira. Apaga em definitivo os
+      # Documentos soft-deletados fora da janela de retencao abaixo.
+      cron: ${JOBS_PURGA_DOCUMENTO_CRON:0 30 3 * * *}
+  documentos:
+    purga:
+      # ADR-020: dias entre a exclusao (soft-delete) e a purga definitiva de um
+      # Documento (arquivo no Object Storage + linha no banco). Ate la, a
+      # exclusao e reversivel.
+      retencao-dias: ${DOCUMENTOS_PURGA_RETENCAO_DIAS:30}
+  jwt:
+    chave-privada: ${JWT_CHAVE_PRIVADA:}
+    chave-publica: ${JWT_CHAVE_PUBLICA:}
+    key-id: ${JWT_KEY_ID:unifinancas-dev}
+    access-token-validade: 15m
+    refresh-token-validade: 30d
+  mail:
+    remetente: ${MAIL_REMETENTE:unifinancas@example.com}
+    resend:
+      api-key: ${RESEND_API_KEY:}
+  fcm:
+    credenciais-path: ${FCM_CREDENCIAIS_PATH:}
+  storage:
+    s3:
+      bucket: ${STORAGE_S3_BUCKET:unifinancas-documentos}
+      region: ${STORAGE_S3_REGION:us-east-1}
+      endpoint-override: ${STORAGE_S3_ENDPOINT_OVERRIDE:}
+      # Em branco em producao (cadeia padrao do AWS SDK / IAM role). Preenchido
+      # so no profile `local` para o MinIO do docker-compose.
+      access-key: ${STORAGE_S3_ACCESS_KEY:}
+      secret-key: ${STORAGE_S3_SECRET_KEY:}
+      url-assinada-validade-minutos: ${STORAGE_S3_URL_VALIDADE_MINUTOS:15}
+  ocr:
+    # T3.1.3 / ADR-016 - cascata de extracao de documentos.
+    confianca-minima: ${OCR_CONFIANCA_MINIMA:0.60}
+    tesseract:
+      comando: ${OCR_TESSERACT_COMANDO:tesseract}
+      idioma: ${OCR_TESSERACT_IDIOMA:por}
+      dpi: ${OCR_TESSERACT_DPI:300}
+      timeout: ${OCR_TESSERACT_TIMEOUT:60s}
+    ia:
+      # Provedor efetivamente chamado na etapa 4: gemini (padrao) ou openai.
+      # Alem da chave, a etapa 4 exige a flag ocrFallbackIaHabilitado do
+      # Ambiente Financeiro (T3.1.2).
+      provedor: ${OCR_IA_PROVEDOR:gemini}
+    gemini:
+      # Em branco = etapa de IA desabilitada quando o provedor e gemini (bean nulo).
+      api-key: ${GEMINI_API_KEY:}
+      modelo: ${GEMINI_MODELO:gemini-2.0-flash}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+      timeout: ${GEMINI_TIMEOUT:30s}
+    openai:
+      # Alternativa, mantida para troca futura sem mexer no codigo. So e usada
+      # quando ocr.ia.provedor=openai.
+      api-key: ${OPENAI_API_KEY:}
+      modelo: ${OPENAI_MODELO:gpt-4o-mini}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      timeout: ${OPENAI_TIMEOUT:30s}
+
+# T3.1.3 / SAD Sec7.6 - resiliencia da unica integracao externa da cascata (IA de visao).
+resilience4j:
+  retry:
+    instances:
+      ocr-ia:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+  circuitbreaker:
+    instances:
+      ocr-ia:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s

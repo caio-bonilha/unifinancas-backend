@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-unifinancas}
+      POSTGRES_USER: ${POSTGRES_USER:-unifinancas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-unifinancas}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-unifinancas} -d ${POSTGRES_DB:-unifinancas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Storage S3 local para desenvolvimento (SAD Sec8.4/Sec19.1): substitui o
+  # Amazon S3 real (T1.8.2) para o fluxo de documentos - upload/anexo (T1.8.3)
+  # e processamento assistido (T3.1.x). O backend (rodando fora do compose,
+  # via ./mvnw) aponta para cá com STORAGE_S3_ENDPOINT_OVERRIDE=http://localhost:9000
+  # e AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY = as credenciais do MinIO
+  # (ver .env.example).
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Cria o bucket dos documentos uma vez e encerra (não fica de pé).
+  minio-setup:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/${STORAGE_S3_BUCKET:-unifinancas-documentos} &&
+      echo 'Bucket pronto: ${STORAGE_S3_BUCKET:-unifinancas-documentos}'
+      "
+    restart: "no"
+
+volumes:
+  postgres_data:
+  minio_data:

@@ -1,0 +1,1 @@
+-- Baseline vazia: marca o início do versionamento de schema via Flyway (SAD §16.4).
